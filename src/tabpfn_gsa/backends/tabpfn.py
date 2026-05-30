@@ -71,7 +71,7 @@ def _import_tabpfn_regressor() -> Any:
         except Exception as error:
             raise ImportError(
                 "Could not import TabPFNRegressor. Install local TabPFN with "
-                "`pip install -e .[tabpfn]`."
+                "`pip install -e .`."
             ) from error
 
 

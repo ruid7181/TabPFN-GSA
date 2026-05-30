@@ -28,34 +28,30 @@ This makes the ICL context more spatially relevant, and usually smaller, so the 
 
 * ### Hyperparameters
 
-| Parameter | Meaning                                                                               |
-|-----------|---------------------------------------------------------------------------------------|
-| `K` | Total number of grids. It must be a square number because `K = N x N`. Larger `K` means finer spatial locality. |
-| `s` | Distant sampling rate. `0` means nearby only; larger values add more distant samples. |
+| Parameter | Meaning                                                                                                                     |
+|-----------|-----------------------------------------------------------------------------------------------------------------------------|
+| `K` | Total number of grids. Currently, it must be a square number because `K = N x N`. Larger `K` means finer spatial locality. |
+| `s` | Distant sampling rate. `0` means nearby only; larger values add more distant samples.                                       |
 
 
 ## Usage
 
 * ### Installation
 
-Download the project first:
+Download the project:
 
 ```bash
 git clone https://github.com/ruid7181/TabPFN-GSA.git
 cd TabPFN-GSA
 ```
 
+For default model (TabPFN running in your local environment):
+
 ```bash
 pip install -e .
 ```
 
-For local TabPFN:
-
-```bash
-pip install -e .[tabpfn]
-```
-
-For tests:
+For development and tests:
 
 ```bash
 pip install -e .[dev]
@@ -131,7 +127,9 @@ Supported metrics: `mae`, `mse`, `rmse`, `r2`.
 
 * ### Use other ICL TFMs as inference model
 
-Apart from TabPFN, any other ICL TFM models are supported as well. For example, another popular model, [TabICL](https://github.com/soda-inria/tabicl), follows the sklearn `fit` / `predict` API, so it can be plugged in directly.
+The default model is local TabPFN. For any other ICL TFM or cloud service, install and configure that environment yourself, then pass its `fit` / `predict` logic through `model_kwargs`.
+
+For example, [TabICL](https://github.com/soda-inria/tabicl) follows the sklearn `fit` / `predict` API, so it can be plugged in directly after TabICL is installed in your environment.
 
 ```python
 from tabicl import TabICLRegressor

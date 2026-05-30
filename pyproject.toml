@@ -16,14 +16,12 @@ dependencies = [
   "pandas>=2.0",
   "scikit-learn>=1.3",
   "optuna>=4.0",
+  "tabpfn",
 ]
 
 [project.optional-dependencies]
 dev = [
   "pytest>=8.0",
-]
-tabpfn = [
-  "tabpfn",
 ]
 
 [tool.setuptools]
