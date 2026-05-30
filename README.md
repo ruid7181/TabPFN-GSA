@@ -6,11 +6,11 @@ _**Attention should be focused more on spatially nearby data points than on dist
 
 ## What is TabPFN-GSA?
 
-🌊🌊🌊 [**TabPFN**](https://www.nature.com/articles/s41586-024-08328-6) is a powerful tabular foundation model (TFM), outperforming traditional tabular models (e.g., XGBoost, CatBoost, etc.) through in-context learning (ICL).
+🌊 [**TabPFN**](https://www.nature.com/articles/s41586-024-08328-6) is a powerful tabular foundation model (TFM), and has shown strong performance against many traditional tabular models (e.g., XGBoost, CatBoost, etc.) through ICL.
 
-🤔🤔🤔 However, when handling **geospatial tabular datasets**, coordinate features (e.g., Lat. & Lon.) are treated the same as other ordinary features. Therefore, underlying spatial structures may not be well modelled, large contexts can make inference less accurate and inefficient.
+🤔 However, when handling **geospatial tabular datasets**, coordinate features (e.g., Lat. & Lon.) are treated the same as other ordinary features. Therefore, underlying spatial structures may not be fully exploited, and large contexts can make inference less accurate and inefficient.
 
-🏄🏻‍♂️🏄🏻‍♂️🏄🏻‍♂️ **TabPFN-GSA** introduces a simple geospatial inductive bias. For each prediction location, it gives more context capacity to nearby samples, and only samples a small subset of distant samples.
+🏄🏻‍♂️ **TabPFN-GSA** introduces a simple geospatial inductive bias. For each prediction location, it gives more context capacity to nearby samples, and only samples a small subset of distant samples.
 
 ![Geospatial Sparse Attention](docs/spatial-sparse-attention.png)
 
