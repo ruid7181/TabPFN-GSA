@@ -39,7 +39,7 @@ def tune_gsa(
     """Tune only the two main GSA hyperparameters with Optuna.
 
     Parameters are intentionally simple:
-    - `K_values`: candidate values for the number of grid cells per axis
+    - `K_values`: candidate values for the total number of grid cells
     - `s_values`: candidate values for the distant grid sampling rate
     - `metric`: one of `mae`, `mse`, `rmse`, or `r2`
     """
@@ -49,7 +49,7 @@ def tune_gsa(
     scorer = get_scorer(scoring_name)
     splitter = KFold(n_splits=cv, shuffle=True, random_state=random_state)
 
-    K_values = list(K_values or [4, 6, 8, 10, 12])
+    K_values = list(K_values or [4, 9, 16, 25, 64])
     s_values = list(s_values or [0.0, 0.05, 0.1, 0.2, 0.3])
 
     if not K_values:

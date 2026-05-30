@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 from sklearn.ensemble import RandomForestRegressor
 
 from tabpfn_gsa.estimator import GSARegressor
@@ -35,7 +36,7 @@ def test_gsa_regressor_returns_prediction_statistics() -> None:
         base_estimator=RandomForestRegressor(n_estimators=20, random_state=0),
         spa_cols=["coord_x", "coord_y"],
         x_cols=["x1", "x2"],
-        K=6,
+        K=9,
         s=0.1,
         n_ensembles=3,
         random_state=0,
@@ -57,7 +58,7 @@ def test_gsa_regressor_infers_x_cols_from_dataframe() -> None:
         base_estimator=RandomForestRegressor(n_estimators=10, random_state=0),
         spa_cols=["coord_x", "coord_y"],
         x_cols=None,
-        K=5,
+        K=4,
         s=0.0,
         n_ensembles=2,
         random_state=0,
@@ -69,3 +70,17 @@ def test_gsa_regressor_infers_x_cols_from_dataframe() -> None:
     assert model.x_cols_ == ["x1", "x2"]
     assert predictions.shape == (len(X_test),)
     assert np.isfinite(predictions).all()
+
+
+def test_gsa_regressor_requires_square_K() -> None:
+    X_train, y_train, _ = make_dataset()
+    model = GSARegressor(
+        base_estimator=RandomForestRegressor(n_estimators=10, random_state=0),
+        spa_cols=["coord_x", "coord_y"],
+        x_cols=["x1", "x2"],
+        K=6,
+        random_state=0,
+    )
+
+    with pytest.raises(ValueError, match="K must be a square number"):
+        model.fit(X_train, y_train)

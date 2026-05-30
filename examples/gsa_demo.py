@@ -50,7 +50,7 @@ def main() -> None:
         x_cols=["x1", "x2"],
         device=args.device,
         verbose=args.verbose,
-        K=8,
+        K=64,
         s=0.1,
         random_state=0,
         model_kwargs=model_kwargs,

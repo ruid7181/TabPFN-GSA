@@ -15,7 +15,7 @@ class GSAModel(GSARegressor):
         self,
         spa_cols: list[str] | None = None,
         x_cols: list[str] | None = None,
-        K: int = 10,
+        K: int = 64,
         s: float = 0.1,
         random_state: int | None = 0,
         device: str = "auto",

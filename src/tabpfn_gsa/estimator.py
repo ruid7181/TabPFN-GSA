@@ -44,7 +44,7 @@ class GSARegressor(BaseEstimator, RegressorMixin):
         base_estimator: Any,
         spa_cols: list[str],
         x_cols: list[str] | None = None,
-        K: int = 10,
+        K: int = 64,
         s: float = 0.1,
         n_ensembles: int = 8,
         min_random_samples: int = 2,
@@ -110,7 +110,7 @@ class GSARegressor(BaseEstimator, RegressorMixin):
         grid_index = build_regular_grid_index(
             train_coords=self.X_train_[self.spa_cols],
             test_coords=X_df[self.spa_cols],
-            K=self.config_.K,
+            K=self.config_.n_grid_per_axis,
         )
 
         ensemble_predictions = np.full((self.config_.n_ensembles, len(X_df)), np.nan, dtype=float)
@@ -128,13 +128,13 @@ class GSARegressor(BaseEstimator, RegressorMixin):
                 neighbor_train_indices = collect_neighbor_train_indices(
                     grid_id=grid_id,
                     grid_index=grid_index,
-                    K=self.config_.K,
+                    K=self.config_.n_grid_per_axis,
                 )
                 n_random_samples = self._compute_random_sample_count(len(neighbor_train_indices))
                 random_train_indices = sample_non_neighbor_train_indices(
                     grid_id=grid_id,
                     grid_index=grid_index,
-                    K=self.config_.K,
+                    K=self.config_.n_grid_per_axis,
                     n_samples=n_random_samples,
                     rng=rng,
                 )
