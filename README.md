@@ -165,3 +165,11 @@ diagnostics = result.diagnostics
 ```
 
 `std` is the ensemble standard deviation across repeated GSA local sampling.
+
+## Citation
+
+```
+This work has been accepted by the International Journal of Geographical Information Science (IJGIS).
+
+Citation details will be released soon.
+```
