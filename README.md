@@ -19,10 +19,10 @@ _**Attention should be focused more on spatially nearby data points than on dist
 GSA follows a simple workflow:
 
 1. Split the study area into `K = N x N` grids using spatial coordinates.
-2. For each to-be-predicted grid, collect training samples from its 3 x 3 neighboring grids.
-3. Randomly include additional training samples from distant grids with rate `s`.
-4. Run the TabPFN regressor on this localised geospatial training context.
-5. Move to the next to-be-predicted grid.
+2. For each to-be-predicted grid, perform the following steps:
+   * **a.** Collect training samples from its 3 x 3 neighboring grids.
+   * **b.** Randomly include additional training samples from distant grids with rate `s`.
+   * **c.** Run the TabPFN regressor on this localised geospatial training context.
 
 This makes the ICL context more spatially relevant, and usually smaller, so the model can effectively deal with larger datasets!
 
@@ -169,7 +169,17 @@ diagnostics = result.diagnostics
 ## Citation
 
 ```
-This work has been accepted by the International Journal of Geographical Information Science (IJGIS).
-
-Citation details will be released soon.
+@article{Deng29062026,
+author = {Rui Deng and Ziqi Li and Mingshu Wang},
+title = {Do foundation models work for geospatial tabular data? An investigation of TabPFN and a proposed enhancement based on geospatial sparse attention},
+journal = {International Journal of Geographical Information Science},
+volume = {0},
+number = {0},
+pages = {1--38},
+year = {2026},
+publisher = {Taylor \& Francis},
+doi = {10.1080/13658816.2026.2691066},
+URL = {https://doi.org/10.1080/13658816.2026.2691066},
+eprint = {https://doi.org/10.1080/13658816.2026.2691066}
+}
 ```
