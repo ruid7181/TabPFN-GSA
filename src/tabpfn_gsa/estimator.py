@@ -65,11 +65,17 @@ class GSARegressor(BaseEstimator, RegressorMixin):
         self.random_state = random_state
         self.verbose = verbose
 
-    def fit(self, X: pd.DataFrame, y: pd.Series | pd.DataFrame | np.ndarray) -> "GSARegressor":
+    def fit(
+        self, X: pd.DataFrame, y: pd.Series | pd.DataFrame | np.ndarray
+    ) -> "GSARegressor":
         """Store the training data and optionally fit a global fallback model."""
 
         X_df = self._validate_dataframe(X, variable_name="X")
         y_series = self._validate_target(y)
+        if len(X_df) != len(y_series):
+            raise ValueError(
+                f"X and y have inconsistent numbers of samples: {len(X_df)} != {len(y_series)}."
+            )
         self._validate_columns(X_df)
 
         x_cols = self.x_cols
@@ -103,7 +109,9 @@ class GSARegressor(BaseEstimator, RegressorMixin):
     def predict_with_uncertainty(self, X: pd.DataFrame) -> PredictionResult:
         """Predict with ensemble mean, standard deviation, and diagnostics."""
 
-        check_is_fitted(self, attributes=["X_train_", "y_train_", "x_cols_", "model_columns_"])
+        check_is_fitted(
+            self, attributes=["X_train_", "y_train_", "x_cols_", "model_columns_"]
+        )
         X_df = self._validate_dataframe(X, variable_name="X")
         self._validate_columns(X_df)
 
@@ -113,7 +121,9 @@ class GSARegressor(BaseEstimator, RegressorMixin):
             K=self.config_.n_grid_per_axis,
         )
 
-        ensemble_predictions = np.full((self.config_.n_ensembles, len(X_df)), np.nan, dtype=float)
+        ensemble_predictions = np.full(
+            (self.config_.n_ensembles, len(X_df)), np.nan, dtype=float
+        )
         train_sizes: list[int] = []
         neighbor_sizes: list[int] = []
         seed_sequence = np.random.SeedSequence(self.random_state)
@@ -130,7 +140,9 @@ class GSARegressor(BaseEstimator, RegressorMixin):
                     grid_index=grid_index,
                     K=self.config_.n_grid_per_axis,
                 )
-                n_random_samples = self._compute_random_sample_count(len(neighbor_train_indices))
+                n_random_samples = self._compute_random_sample_count(
+                    len(neighbor_train_indices)
+                )
                 random_train_indices = sample_non_neighbor_train_indices(
                     grid_id=grid_id,
                     grid_index=grid_index,
@@ -138,12 +150,18 @@ class GSARegressor(BaseEstimator, RegressorMixin):
                     n_samples=n_random_samples,
                     rng=rng,
                 )
-                local_train_indices = merge_unique_indices(neighbor_train_indices, random_train_indices)
+                local_train_indices = merge_unique_indices(
+                    neighbor_train_indices, random_train_indices
+                )
 
                 if not local_train_indices:
                     if self.config_.use_global_fallback:
-                        predictions = self.global_estimator_.predict(X_df.iloc[grid_cell.test_indices][self.model_columns_])
-                        ensemble_predictions[ensemble_index, grid_cell.test_indices] = np.asarray(predictions).reshape(-1)
+                        predictions = self.global_estimator_.predict(
+                            X_df.iloc[grid_cell.test_indices][self.model_columns_]
+                        )
+                        ensemble_predictions[ensemble_index, grid_cell.test_indices] = (
+                            np.asarray(predictions).reshape(-1)
+                        )
                         continue
                     raise RuntimeError(
                         "No local training samples were available for a test cell and global fallback is disabled."
@@ -153,25 +171,37 @@ class GSARegressor(BaseEstimator, RegressorMixin):
                     self.X_train_.iloc[local_train_indices],
                     self.y_train_.iloc[local_train_indices],
                 )
-                predictions = local_estimator.predict(X_df.iloc[grid_cell.test_indices][self.model_columns_])
-                ensemble_predictions[ensemble_index, grid_cell.test_indices] = np.asarray(predictions).reshape(-1)
+                predictions = local_estimator.predict(
+                    X_df.iloc[grid_cell.test_indices][self.model_columns_]
+                )
+                ensemble_predictions[ensemble_index, grid_cell.test_indices] = (
+                    np.asarray(predictions).reshape(-1)
+                )
                 train_sizes.append(len(local_train_indices))
                 neighbor_sizes.append(len(neighbor_train_indices))
 
         fallback_predictions = 0
         if np.isnan(ensemble_predictions).any():
             if not self.config_.use_global_fallback:
-                raise RuntimeError("Missing predictions were produced and global fallback is disabled.")
+                raise RuntimeError(
+                    "Missing predictions were produced and global fallback is disabled."
+                )
 
             missing_mask = np.isnan(ensemble_predictions)
             row_has_missing = missing_mask.any(axis=0)
             fallback_predictions = int(row_has_missing.sum())
-            fallback_values = np.asarray(self.global_estimator_.predict(X_df.loc[row_has_missing, self.model_columns_]))
+            fallback_values = np.asarray(
+                self.global_estimator_.predict(
+                    X_df.loc[row_has_missing, self.model_columns_]
+                )
+            )
             ensemble_predictions[:, row_has_missing] = fallback_values
 
         diagnostics = PredictionDiagnostics(
             average_train_size=float(np.mean(train_sizes)) if train_sizes else 0.0,
-            average_neighbor_size=float(np.mean(neighbor_sizes)) if neighbor_sizes else 0.0,
+            average_neighbor_size=(
+                float(np.mean(neighbor_sizes)) if neighbor_sizes else 0.0
+            ),
             fitted_local_models=len(train_sizes),
             fallback_predictions=fallback_predictions,
         )
@@ -194,22 +224,38 @@ class GSARegressor(BaseEstimator, RegressorMixin):
 
     def _compute_random_sample_count(self, n_neighbor_samples: int) -> int:
         if self.config_.s == 0.0:
-            return self.config_.min_random_samples
+            return 0
         remaining_train_pool = max(0, len(self.X_train_) - n_neighbor_samples)
-        return int(remaining_train_pool * self.config_.s)
+        return max(
+            self.config_.min_random_samples, int(remaining_train_pool * self.config_.s)
+        )
 
     def _validate_columns(self, X: pd.DataFrame) -> None:
-        missing_columns = [column for column in self.spa_cols if column not in X.columns]
+        missing_columns = [
+            column for column in self.spa_cols if column not in X.columns
+        ]
         if missing_columns:
             raise ValueError(f"Missing required spatial columns: {missing_columns}")
 
-        if self.x_cols is not None:
-            feature_missing = [column for column in self.x_cols if column not in X.columns]
-            if feature_missing:
-                raise ValueError(f"Missing required x columns: {feature_missing}")
-
         if len(self.spa_cols) != 2:
             raise ValueError("Exactly two spa columns are required.")
+        if len(set(self.spa_cols)) != 2:
+            raise ValueError("spa_cols must contain two distinct column names.")
+
+        if self.x_cols is not None:
+            feature_missing = [
+                column for column in self.x_cols if column not in X.columns
+            ]
+            if feature_missing:
+                raise ValueError(f"Missing required x columns: {feature_missing}")
+            if len(set(self.x_cols)) != len(self.x_cols):
+                raise ValueError("x_cols must not contain duplicate columns.")
+            overlap = set(self.x_cols).intersection(self.spa_cols)
+            if overlap:
+                raise ValueError(
+                    "x_cols and spa_cols must not overlap. Overlapping columns: "
+                    f"{sorted(overlap)}"
+                )
 
     @staticmethod
     def _validate_dataframe(X: Any, variable_name: str) -> pd.DataFrame:

@@ -5,11 +5,11 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "tabpfn-gsa"
 version = "0.1.0"
-description = "A clean extraction of the grid-based geospatial sparse attention workflow used for TabPFN-GSA."
+description = "Geospatial Sparse Attention (GSA) for TabPFN: spatially localised in-context learning for geospatial tabular data."
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [
-  { name = "Codex Workspace Extraction" }
+  { name = "Rui Deng" }
 ]
 dependencies = [
   "numpy>=1.24",
@@ -18,6 +18,10 @@ dependencies = [
   "optuna>=4.0",
   "tabpfn",
 ]
+
+[project.urls]
+Homepage = "https://github.com/ruid7181/TabPFN-GSA"
+Repository = "https://github.com/ruid7181/TabPFN-GSA"
 
 [project.optional-dependencies]
 dev = [

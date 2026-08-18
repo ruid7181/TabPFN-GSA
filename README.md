@@ -31,7 +31,7 @@ This makes the ICL context more spatially relevant, and usually smaller, so the 
 | Parameter | Meaning                                                                                                                     |
 |-----------|-----------------------------------------------------------------------------------------------------------------------------|
 | `K` | Total number of grids. Currently, it must be a square number because `K = N x N`. Larger `K` means finer spatial locality. |
-| `s` | Distant sampling rate. `0` means nearby only; larger values add more distant samples.                                       |
+| `s` | Distant sampling rate. `0` means nearby only; larger values add more distant samples (a small minimum is kept when `s > 0`). |
 
 
 ## Usage
@@ -169,17 +169,12 @@ diagnostics = result.diagnostics
 ## Citation
 
 ```
-@article{Deng29062026,
-author = {Rui Deng and Ziqi Li and Mingshu Wang},
-title = {Do foundation models work for geospatial tabular data? An investigation of TabPFN and a proposed enhancement based on geospatial sparse attention},
-journal = {International Journal of Geographical Information Science},
-volume = {0},
-number = {0},
-pages = {1--38},
-year = {2026},
-publisher = {Taylor \& Francis},
-doi = {10.1080/13658816.2026.2691066},
-URL = {https://doi.org/10.1080/13658816.2026.2691066},
-eprint = {https://doi.org/10.1080/13658816.2026.2691066}
+@article{deng2026foundation,
+  title={Do foundation models work for geospatial tabular data? An investigation of TabPFN and a proposed enhancement based on geospatial sparse attention},
+  author={Deng, Rui and Li, Ziqi and Wang, Mingshu},
+  journal={International Journal of Geographical Information Science},
+  pages={1--38},
+  year={2026},
+  publisher={Taylor \& Francis}
 }
 ```

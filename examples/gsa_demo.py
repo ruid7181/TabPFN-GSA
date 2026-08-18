@@ -10,13 +10,21 @@ from sklearn.model_selection import train_test_split
 from tabpfn_gsa import GSAModel
 
 
-def make_synthetic_geospatial_dataset(n_samples: int = 400, random_state: int = 0) -> pd.DataFrame:
+def make_synthetic_geospatial_dataset(
+    n_samples: int = 400, random_state: int = 0
+) -> pd.DataFrame:
     rng = np.random.default_rng(random_state)
     coord_x = rng.uniform(0.0, 1.0, size=n_samples)
     coord_y = rng.uniform(0.0, 1.0, size=n_samples)
     x1 = rng.normal(size=n_samples)
     x2 = rng.normal(size=n_samples)
-    target = x1 + 0.5 * x2 + np.sin(coord_x * 6.0) - np.cos(coord_y * 4.0) + rng.normal(scale=0.05, size=n_samples)
+    target = (
+        x1
+        + 0.5 * x2
+        + np.sin(coord_x * 6.0)
+        - np.cos(coord_y * 4.0)
+        + rng.normal(scale=0.05, size=n_samples)
+    )
 
     return pd.DataFrame(
         {
@@ -64,8 +72,6 @@ def main() -> None:
     model.fit(X_train, y_train)
     predictions = model.predict(X_test)
 
-    if not args.verbose:
-        print(model.format_runtime_info())
     print(f"R2: {r2_score(y_test, predictions):.4f}")
     print(f"MAE: {mean_absolute_error(y_test, predictions):.4f}")
 

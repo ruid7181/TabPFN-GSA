@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import isqrt
 from typing import Any
 from typing import Sequence
 
@@ -57,6 +58,15 @@ def tune_gsa(
     if not s_values:
         raise ValueError("s_values must contain at least one candidate value.")
 
+    for candidate in K_values:
+        if candidate < 1 or isqrt(candidate) ** 2 != candidate:
+            raise ValueError(
+                f"K_values must contain square numbers only, for example 4, 9, 16, 25, or 64; got {candidate}."
+            )
+    for candidate in s_values:
+        if not 0.0 <= candidate <= 1.0:
+            raise ValueError(f"s_values must be between 0 and 1; got {candidate}.")
+
     sampler = optuna.samplers.TPESampler(seed=random_state)
     study = optuna.create_study(direction="maximize", sampler=sampler)
 
@@ -70,7 +80,9 @@ def tune_gsa(
         if verbose:
             print(f"Trial {trial.number}: {params}")
 
-        for fold_index, (train_idx, valid_idx) in enumerate(splitter.split(X_df, y_series)):
+        for fold_index, (train_idx, valid_idx) in enumerate(
+            splitter.split(X_df, y_series)
+        ):
             model = clone(estimator)
             model.set_params(**params)
 
@@ -97,12 +109,20 @@ def tune_gsa(
     if refit:
         best_estimator.fit(X_df, y_series)
 
+    normalized_metric = metric.lower()
+    negative_metrics = {"mae", "mse", "rmse"}
+    best_score = (
+        -float(study.best_value)
+        if normalized_metric in negative_metrics
+        else float(study.best_value)
+    )
+
     return GSATuningResult(
         best_estimator=best_estimator,
         best_params=dict(study.best_params),
-        best_score=float(study.best_value),
+        best_score=best_score,
         trials_dataframe=study.trials_dataframe(),
-        metric=metric.lower(),
+        metric=normalized_metric,
         study=study,
     )
 
