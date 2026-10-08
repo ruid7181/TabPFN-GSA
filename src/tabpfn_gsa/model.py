@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from sklearn.base import clone
+
 from tabpfn_gsa.backends.base import ModelRuntimeInfo, format_runtime_info
 from tabpfn_gsa.backends.functions import build_function_backend
 from tabpfn_gsa.backends.tabpfn import build_local_tabpfn_backend
@@ -34,7 +36,6 @@ class GSAModel(GSARegressor):
         self.n_ensembles = 3
         self.min_random_samples = 2
         self.include_spatial_features = True
-        self.use_global_fallback = True
         self.random_state = random_state
         self.device = device
         self.verbose = verbose
@@ -54,15 +55,29 @@ class GSAModel(GSARegressor):
             n_ensembles=self.n_ensembles,
             min_random_samples=self.min_random_samples,
             include_spatial_features=self.include_spatial_features,
-            use_global_fallback=self.use_global_fallback,
             random_state=self.random_state,
             verbose=verbose,
         )
 
     def fit(self, X, y):
+        backend = self._build_backend()
+        self.base_estimator = backend.estimator
+        self.runtime_info_ = backend.runtime_info
+        self.resolved_execution = backend.runtime_info.resolved_execution
         if self.verbose:
             print(self.format_runtime_info())
         return super().fit(X, y)
+
+    def __sklearn_clone__(self):
+        params = self.get_params(deep=False)
+        kwargs = params.pop("model_kwargs")
+        params = {key: clone(value, safe=False) for key, value in params.items()}
+        # Bound callbacks must retain their shared owner when Optuna clones GSA.
+        params["model_kwargs"] = None if kwargs is None else {
+            key: value if key in {"fit_fn", "predict_fn"} else clone(value, safe=False)
+            for key, value in kwargs.items()
+        }
+        return type(self)(**params)
 
     def get_runtime_info(self) -> ModelRuntimeInfo:
         return self.runtime_info_
@@ -76,6 +91,7 @@ class GSAModel(GSARegressor):
         if "fit_fn" in kwargs or "predict_fn" in kwargs:
             return build_function_backend(model_kwargs=kwargs)
 
+        kwargs.setdefault("random_state", self.random_state)
         return build_local_tabpfn_backend(
             model_kwargs=kwargs,
             device=self.device,

@@ -11,6 +11,8 @@ from sklearn.base import clone
 from sklearn.metrics import get_scorer
 from sklearn.model_selection import KFold
 
+from tabpfn_gsa.estimator import _EmptyContextError
+
 
 @dataclass(frozen=True)
 class GSATuningResult:
@@ -102,7 +104,14 @@ def tune_gsa(
         trial.set_user_attr("fold_scores", fold_scores)
         return mean_score
 
-    study.optimize(objective, n_trials=n_trials, show_progress_bar=False)
+    study.optimize(
+        objective, n_trials=n_trials, show_progress_bar=False, catch=(_EmptyContextError,)
+    )
+    if not any(trial.state == optuna.trial.TrialState.COMPLETE for trial in study.trials):
+        raise ValueError(
+            "No tested K/s combination completed successfully. "
+            "Try smaller K_values or positive s_values."
+        )
 
     best_estimator = clone(estimator)
     best_estimator.set_params(**study.best_params)

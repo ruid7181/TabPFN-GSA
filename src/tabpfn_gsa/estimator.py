@@ -19,6 +19,10 @@ from tabpfn_gsa.grid import (
 )
 
 
+class _EmptyContextError(ValueError):
+    """A grid has no training context for the selected K and s."""
+
+
 @dataclass(frozen=True)
 class PredictionDiagnostics:
     """Summary diagnostics from one GSA prediction run."""
@@ -26,7 +30,6 @@ class PredictionDiagnostics:
     average_train_size: float
     average_neighbor_size: float
     fitted_local_models: int
-    fallback_predictions: int
 
 
 @dataclass(frozen=True)
@@ -52,7 +55,6 @@ class GSARegressor(BaseEstimator, RegressorMixin):
         n_ensembles: int = 8,
         min_random_samples: int = 2,
         include_spatial_features: bool = True,
-        use_global_fallback: bool = True,
         random_state: int | None = None,
         verbose: bool = False,
     ) -> None:
@@ -65,14 +67,13 @@ class GSARegressor(BaseEstimator, RegressorMixin):
         self.n_ensembles = n_ensembles
         self.min_random_samples = min_random_samples
         self.include_spatial_features = include_spatial_features
-        self.use_global_fallback = use_global_fallback
         self.random_state = random_state
         self.verbose = verbose
 
     def fit(
         self, X: pd.DataFrame, y: pd.Series | pd.DataFrame | np.ndarray
     ) -> "GSARegressor":
-        """Store the training data and optionally fit a global fallback model."""
+        """Validate and store training data; local models are fitted at prediction time."""
 
         X_df = self._validate_dataframe(X, variable_name="X")
         y_series = self._validate_target(y)
@@ -92,7 +93,6 @@ class GSARegressor(BaseEstimator, RegressorMixin):
             n_ensembles=self.n_ensembles,
             min_random_samples=self.min_random_samples,
             include_spatial_features=self.include_spatial_features,
-            use_global_fallback=self.use_global_fallback,
         )
         self.x_cols_ = list(x_cols)
         self.model_columns_ = self._build_model_columns()
@@ -101,8 +101,7 @@ class GSARegressor(BaseEstimator, RegressorMixin):
         self.target_name_ = self.y_train_.name or "target"
         self.spa_bounds_ = self._resolve_spa_bounds(self.X_train_[self.spa_cols])
 
-        if self.config_.use_global_fallback:
-            self.global_estimator_ = self._fit_estimator(self.X_train_, self.y_train_)
+        self._sampling_seed_ = np.random.SeedSequence(self.random_state).entropy
 
         return self
 
@@ -126,6 +125,9 @@ class GSARegressor(BaseEstimator, RegressorMixin):
         )
         X_df = self._validate_dataframe(X, variable_name="X")
         self._validate_columns(X_df)
+        missing_columns = [col for col in self.model_columns_ if col not in X_df]
+        if missing_columns:
+            raise ValueError(f"Missing training feature columns: {missing_columns}")
 
         grid_index = build_regular_grid_index(
             train_coords=self.X_train_[self.spa_cols],
@@ -139,15 +141,17 @@ class GSARegressor(BaseEstimator, RegressorMixin):
         )
         train_sizes: list[int] = []
         neighbor_sizes: list[int] = []
-        seed_sequence = np.random.SeedSequence(self.random_state)
-        child_seeds = seed_sequence.spawn(self.config_.n_ensembles)
-
-        for ensemble_index, child_seed in enumerate(child_seeds):
-            rng = np.random.default_rng(child_seed)
+        for ensemble_index in range(self.config_.n_ensembles):
             for grid_id, grid_cell in grid_index.items():
                 if not grid_cell.test_indices:
                     continue
 
+                # Each cell gets the same context regardless of prediction batching.
+                rng = np.random.default_rng(
+                    np.random.SeedSequence(
+                        self._sampling_seed_, spawn_key=(ensemble_index, *grid_id)
+                    )
+                )
                 neighbor_train_indices = collect_neighbor_train_indices(
                     grid_id=grid_id,
                     grid_index=grid_index,
@@ -168,16 +172,10 @@ class GSARegressor(BaseEstimator, RegressorMixin):
                 )
 
                 if not local_train_indices:
-                    if self.config_.use_global_fallback:
-                        predictions = self.global_estimator_.predict(
-                            X_df.iloc[grid_cell.test_indices][self.model_columns_]
-                        )
-                        ensemble_predictions[ensemble_index, grid_cell.test_indices] = (
-                            np.asarray(predictions).reshape(-1)
-                        )
-                        continue
-                    raise RuntimeError(
-                        "No local training samples were available for a test cell and global fallback is disabled."
+                    raise _EmptyContextError(
+                        f"No training samples are available for grid {grid_id}. "
+                        "Increase s above 0 to include distant samples, or reduce K "
+                        "to use a wider neighborhood."
                     )
 
                 local_estimator = self._fit_estimator(
@@ -187,28 +185,18 @@ class GSARegressor(BaseEstimator, RegressorMixin):
                 predictions = local_estimator.predict(
                     X_df.iloc[grid_cell.test_indices][self.model_columns_]
                 )
-                ensemble_predictions[ensemble_index, grid_cell.test_indices] = (
-                    np.asarray(predictions).reshape(-1)
-                )
+                if hasattr(predictions, "detach"):
+                    predictions = predictions.detach().cpu().double().numpy()
+                predictions = np.asarray(predictions, dtype=float)
+                if predictions.ndim == 2 and predictions.shape[1] == 1:
+                    predictions = predictions[:, 0]
+                if predictions.ndim != 1 or len(predictions) != len(grid_cell.test_indices):
+                    raise ValueError("The model must return one prediction per input row.")
+                if not np.isfinite(predictions).all():
+                    raise ValueError("The model returned NaN or infinite predictions.")
+                ensemble_predictions[ensemble_index, grid_cell.test_indices] = predictions
                 train_sizes.append(len(local_train_indices))
                 neighbor_sizes.append(len(neighbor_train_indices))
-
-        fallback_predictions = 0
-        if np.isnan(ensemble_predictions).any():
-            if not self.config_.use_global_fallback:
-                raise RuntimeError(
-                    "Missing predictions were produced and global fallback is disabled."
-                )
-
-            missing_mask = np.isnan(ensemble_predictions)
-            row_has_missing = missing_mask.any(axis=0)
-            fallback_predictions = int(row_has_missing.sum())
-            fallback_values = np.asarray(
-                self.global_estimator_.predict(
-                    X_df.loc[row_has_missing, self.model_columns_]
-                )
-            )
-            ensemble_predictions[:, row_has_missing] = fallback_values
 
         diagnostics = PredictionDiagnostics(
             average_train_size=float(np.mean(train_sizes)) if train_sizes else 0.0,
@@ -216,7 +204,6 @@ class GSARegressor(BaseEstimator, RegressorMixin):
                 float(np.mean(neighbor_sizes)) if neighbor_sizes else 0.0
             ),
             fitted_local_models=len(train_sizes),
-            fallback_predictions=fallback_predictions,
         )
 
         return PredictionResult(
@@ -255,6 +242,14 @@ class GSARegressor(BaseEstimator, RegressorMixin):
         if len(set(self.spa_cols)) != 2:
             raise ValueError("spa_cols must contain two distinct column names.")
 
+        try:
+            coordinates = X[self.spa_cols].to_numpy(dtype=float)
+        except (TypeError, ValueError) as error:
+            raise ValueError("Spatial coordinates must be numeric and finite.") from error
+        if not np.isfinite(coordinates).all():
+            raise ValueError("Spatial coordinates must not contain missing or infinite values.")
+        X[self.spa_cols] = coordinates
+
         if self.x_cols is not None:
             feature_missing = [
                 column for column in self.x_cols if column not in X.columns
@@ -283,10 +278,16 @@ class GSARegressor(BaseEstimator, RegressorMixin):
         mins: list[float] = []
         maxs: list[float] = []
         for column in self.spa_cols:
-            lower, upper = self.spa_bounds[column]
-            if upper <= lower:
+            try:
+                lower, upper = self.spa_bounds[column]
+                lower, upper = float(lower), float(upper)
+            except (TypeError, ValueError) as error:
                 raise ValueError(
-                    f"spa_bounds for {column!r} must have upper bound greater than lower bound."
+                    f"spa_bounds for {column!r} must be a finite (lower, upper) pair."
+                ) from error
+            if not np.isfinite([lower, upper]).all() or upper <= lower:
+                raise ValueError(
+                    f"spa_bounds for {column!r} must be finite with upper > lower."
                 )
             mins.append(float(lower))
             maxs.append(float(upper))
@@ -300,6 +301,10 @@ class GSARegressor(BaseEstimator, RegressorMixin):
     def _validate_dataframe(X: Any, variable_name: str) -> pd.DataFrame:
         if not isinstance(X, pd.DataFrame):
             raise TypeError(f"{variable_name} must be a pandas DataFrame.")
+        if X.empty:
+            raise ValueError(f"{variable_name} must contain at least one row and column.")
+        if not X.columns.is_unique:
+            raise ValueError(f"{variable_name} must not contain duplicate column names.")
         return X.copy()
 
     @staticmethod
@@ -307,9 +312,18 @@ class GSARegressor(BaseEstimator, RegressorMixin):
         if isinstance(y, pd.DataFrame):
             if y.shape[1] != 1:
                 raise ValueError("Only a single regression target is supported.")
-            return y.iloc[:, 0].copy()
-        if isinstance(y, pd.Series):
-            return y.copy()
-
-        y_array = np.asarray(y).reshape(-1)
-        return pd.Series(y_array, name="target")
+            y = y.iloc[:, 0]
+        if not isinstance(y, pd.Series):
+            y_array = np.asarray(y)
+            if y_array.ndim == 2 and y_array.shape[1] == 1:
+                y_array = y_array[:, 0]
+            if y_array.ndim != 1:
+                raise ValueError("Only a single regression target is supported.")
+            y = pd.Series(y_array, name="target")
+        try:
+            target = y.astype(float)
+        except (TypeError, ValueError) as error:
+            raise ValueError("y must contain numeric, finite target values.") from error
+        if not np.isfinite(target.to_numpy()).all():
+            raise ValueError("y must not contain missing or infinite values.")
+        return target

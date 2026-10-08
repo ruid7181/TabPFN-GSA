@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import pandas as pd
+import numpy as np
+import optuna
+import pytest
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.dummy import DummyRegressor
 
 from tabpfn_gsa import tune_gsa
 from tabpfn_gsa.estimator import GSARegressor
@@ -97,3 +101,28 @@ def test_tune_gsa_accepts_mse_metric() -> None:
     assert "K" in result.best_params
     assert "s" in result.best_params
     assert not result.trials_dataframe.empty
+
+
+@pytest.mark.parametrize("s_values", [[0.0, 0.1], [0.0]])
+def test_tuning_handles_empty_spatial_contexts(s_values) -> None:
+    X = pd.DataFrame({
+        "coord_x": np.linspace(0.05, 0.95, 12),
+        "coord_y": np.linspace(0.05, 0.95, 12),
+    })
+    y = pd.Series(np.arange(12, dtype=float))
+    model = GSARegressor(
+        base_estimator=DummyRegressor(), spa_cols=["coord_x", "coord_y"],
+        spa_bounds={"coord_x": (0, 1), "coord_y": (0, 1)}, random_state=0,
+    )
+    kwargs = dict(
+        estimator=model, X=X, y=y, K_values=[4096], s_values=s_values,
+        cv=2, n_trials=4, random_state=0,
+    )
+    if s_values == [0.0]:
+        with pytest.raises(ValueError, match="Try smaller K_values or positive s_values"):
+            tune_gsa(**kwargs)
+    else:
+        result = tune_gsa(**kwargs)
+        assert result.best_params["s"] == 0.1
+        assert any(t.state == optuna.trial.TrialState.FAIL for t in result.study.trials)
+        assert np.isfinite(result.best_estimator.predict(X)).all()

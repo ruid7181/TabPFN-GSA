@@ -11,7 +11,6 @@ class GSAConfig:
     n_ensembles: int = 3
     min_random_samples: int = 2
     include_spatial_features: bool = True
-    use_global_fallback: bool = True
 
     def __post_init__(self) -> None:
         if self.K < 1:

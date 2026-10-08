@@ -137,3 +137,54 @@ def test_gsa_regressor_accepts_explicit_spatial_bounds() -> None:
 
     assert np.allclose(model.spa_bounds_.mins, [-1.0, -2.0])
     assert np.allclose(model.spa_bounds_.maxs, [2.0, 3.0])
+
+
+@pytest.mark.parametrize("value", [np.nan, np.inf, -np.inf, "invalid"])
+@pytest.mark.parametrize("stage", ["fit", "predict"])
+def test_invalid_coordinates_are_rejected(value, stage) -> None:
+    X, y, queries = make_dataset()
+    model = GSARegressor(
+        base_estimator=RandomForestRegressor(random_state=0),
+        spa_cols=["coord_x", "coord_y"],
+    )
+    bad = (X if stage == "fit" else queries).copy()
+    bad["coord_x"] = bad["coord_x"].astype(object)
+    bad.loc[0, "coord_x"] = value
+    if stage == "predict":
+        model.fit(X, y)
+    with pytest.raises(ValueError, match="Spatial coordinates"):
+        model.fit(bad, y) if stage == "fit" else model.predict(bad)
+
+
+@pytest.mark.parametrize("bounds", [(0, np.nan), (-np.inf, 1), (0, np.inf), (1, 0), (0,)])
+def test_invalid_spatial_bounds_are_rejected(bounds) -> None:
+    X, y, _ = make_dataset()
+    model = GSARegressor(
+        base_estimator=RandomForestRegressor(random_state=0),
+        spa_cols=["coord_x", "coord_y"],
+        spa_bounds={"coord_x": bounds, "coord_y": (0, 1)},
+    )
+    with pytest.raises(ValueError, match="spa_bounds"):
+        model.fit(X, y)
+
+
+@pytest.mark.parametrize("value", [np.nan, np.inf])
+def test_invalid_targets_are_rejected_at_fit(value) -> None:
+    X, y, _ = make_dataset()
+    y.iloc[0] = value
+    model = GSARegressor(
+        base_estimator=RandomForestRegressor(random_state=0),
+        spa_cols=["coord_x", "coord_y"],
+    )
+    with pytest.raises(ValueError, match="y must not contain"):
+        model.fit(X, y)
+
+
+def test_prediction_requires_inferred_training_features() -> None:
+    X, y, queries = make_dataset()
+    model = GSARegressor(
+        base_estimator=RandomForestRegressor(random_state=0),
+        spa_cols=["coord_x", "coord_y"],
+    ).fit(X, y)
+    with pytest.raises(ValueError, match="Missing training feature columns.*x1"):
+        model.predict(queries.drop(columns="x1"))
