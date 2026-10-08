@@ -11,7 +11,9 @@ from sklearn.utils.validation import check_is_fitted
 from tabpfn_gsa.config import GSAConfig
 from tabpfn_gsa.grid import (
     build_regular_grid_index,
+    build_grid_bounds,
     collect_neighbor_train_indices,
+    GridBounds,
     merge_unique_indices,
     sample_non_neighbor_train_indices,
 )
@@ -43,6 +45,7 @@ class GSARegressor(BaseEstimator, RegressorMixin):
         self,
         base_estimator: Any,
         spa_cols: list[str],
+        spa_bounds: dict[str, tuple[float, float]] | None = None,
         x_cols: list[str] | None = None,
         K: int = 64,
         s: float = 0.1,
@@ -55,6 +58,7 @@ class GSARegressor(BaseEstimator, RegressorMixin):
     ) -> None:
         self.base_estimator = base_estimator
         self.spa_cols = spa_cols
+        self.spa_bounds = spa_bounds
         self.x_cols = x_cols
         self.K = K
         self.s = s
@@ -95,6 +99,7 @@ class GSARegressor(BaseEstimator, RegressorMixin):
         self.X_train_ = X_df.reset_index(drop=True).copy()
         self.y_train_ = y_series.reset_index(drop=True).copy()
         self.target_name_ = self.y_train_.name or "target"
+        self.spa_bounds_ = self._resolve_spa_bounds(self.X_train_[self.spa_cols])
 
         if self.config_.use_global_fallback:
             self.global_estimator_ = self._fit_estimator(self.X_train_, self.y_train_)
@@ -110,7 +115,14 @@ class GSARegressor(BaseEstimator, RegressorMixin):
         """Predict with ensemble mean, standard deviation, and diagnostics."""
 
         check_is_fitted(
-            self, attributes=["X_train_", "y_train_", "x_cols_", "model_columns_"]
+            self,
+            attributes=[
+                "X_train_",
+                "y_train_",
+                "x_cols_",
+                "model_columns_",
+                "spa_bounds_",
+            ],
         )
         X_df = self._validate_dataframe(X, variable_name="X")
         self._validate_columns(X_df)
@@ -119,6 +131,7 @@ class GSARegressor(BaseEstimator, RegressorMixin):
             train_coords=self.X_train_[self.spa_cols],
             test_coords=X_df[self.spa_cols],
             K=self.config_.n_grid_per_axis,
+            bounds=self.spa_bounds_,
         )
 
         ensemble_predictions = np.full(
@@ -256,6 +269,32 @@ class GSARegressor(BaseEstimator, RegressorMixin):
                     "x_cols and spa_cols must not overlap. Overlapping columns: "
                     f"{sorted(overlap)}"
                 )
+
+    def _resolve_spa_bounds(self, train_coords: pd.DataFrame) -> GridBounds:
+        if self.spa_bounds is None:
+            return build_grid_bounds(train_coords)
+
+        missing_bounds = [
+            column for column in self.spa_cols if column not in self.spa_bounds
+        ]
+        if missing_bounds:
+            raise ValueError(f"Missing spa_bounds entries for: {missing_bounds}")
+
+        mins: list[float] = []
+        maxs: list[float] = []
+        for column in self.spa_cols:
+            lower, upper = self.spa_bounds[column]
+            if upper <= lower:
+                raise ValueError(
+                    f"spa_bounds for {column!r} must have upper bound greater than lower bound."
+                )
+            mins.append(float(lower))
+            maxs.append(float(upper))
+
+        return GridBounds(
+            mins=np.asarray(mins, dtype=float),
+            maxs=np.asarray(maxs, dtype=float),
+        )
 
     @staticmethod
     def _validate_dataframe(X: Any, variable_name: str) -> pd.DataFrame:

@@ -68,6 +68,7 @@ Core parameters:
 | Parameter | Description                                                                |
 |-----------|----------------------------------------------------------------------------|
 | `spa_cols` | Two spatial coordinate columns, for example `["coord_x", "coord_y"]`.      |
+| `spa_bounds` | Optional fixed spatial bounds, for example `{"coord_x": (0, 1), "coord_y": (0, 1)}`. If omitted, bounds are learned from training coordinates. |
 | `x_cols` | Non-spatial feature columns. If omitted, all non-spatial columns are used. |
 | `K` | Total number of grids. It must be a square number because `K = N x N`.     |
 | `s` | Distant sampling rate.                                                     |
@@ -83,6 +84,8 @@ from tabpfn_gsa import GSAModel
 
 model = GSAModel(
     spa_cols=["coord_x", "coord_y"],
+    # Optional: fix the grid range instead of learning it from training coordinates.
+    # spa_bounds={"coord_x": (0.0, 1.0), "coord_y": (0.0, 1.0)},
     x_cols=["x1", "x2"],
     K=64,
     s=0.1,

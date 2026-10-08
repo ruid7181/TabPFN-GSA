@@ -14,6 +14,7 @@ class GSAModel(GSARegressor):
     def __init__(
         self,
         spa_cols: list[str] | None = None,
+        spa_bounds: dict[str, tuple[float, float]] | None = None,
         x_cols: list[str] | None = None,
         K: int = 64,
         s: float = 0.1,
@@ -26,6 +27,7 @@ class GSAModel(GSARegressor):
             raise ValueError("spa_cols is required.")
 
         self.spa_cols = spa_cols
+        self.spa_bounds = spa_bounds
         self.x_cols = x_cols
         self.K = K
         self.s = s
@@ -45,6 +47,7 @@ class GSAModel(GSARegressor):
         super().__init__(
             base_estimator=backend.estimator,
             spa_cols=spa_cols,
+            spa_bounds=spa_bounds,
             x_cols=x_cols,
             K=K,
             s=s,

@@ -17,16 +17,37 @@ class GridCell:
     test_indices: list[int]
 
 
+@dataclass(frozen=True)
+class GridBounds:
+    """Fixed spatial bounds used to build a regular grid."""
+
+    mins: np.ndarray
+    maxs: np.ndarray
+
+
+def build_grid_bounds(coords: pd.DataFrame) -> GridBounds:
+    """Build grid bounds from training coordinates."""
+
+    coord_values = coords.to_numpy(dtype=float)
+    return GridBounds(
+        mins=coord_values.min(axis=0),
+        maxs=coord_values.max(axis=0),
+    )
+
+
 def build_regular_grid_index(
     train_coords: pd.DataFrame,
     test_coords: pd.DataFrame,
     K: int,
+    bounds: GridBounds | None = None,
 ) -> dict[GridId, GridCell]:
     """Build a regular 2D grid and assign train and test rows to cells."""
 
-    combined = np.vstack([train_coords.to_numpy(), test_coords.to_numpy()])
-    mins = combined.min(axis=0)
-    spans = combined.max(axis=0) - mins
+    if bounds is None:
+        bounds = build_grid_bounds(train_coords)
+
+    mins = bounds.mins
+    spans = bounds.maxs - mins
     spans = np.where(spans < 1e-12, 1.0, spans)
     steps = spans / K
 

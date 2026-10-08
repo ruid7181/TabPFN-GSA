@@ -84,3 +84,56 @@ def test_gsa_regressor_requires_square_K() -> None:
 
     with pytest.raises(ValueError, match="K must be a square number"):
         model.fit(X_train, y_train)
+
+
+def test_prediction_is_stable_when_batch_contains_out_of_bounds_points() -> None:
+    X_train, y_train, _ = make_dataset(n_samples=400)
+    in_bounds_point = pd.DataFrame(
+        {
+            "x1": [0.0],
+            "x2": [0.0],
+            "coord_x": [0.9],
+            "coord_y": [0.9],
+        }
+    )
+    far_point = pd.DataFrame(
+        {
+            "x1": [0.0],
+            "x2": [0.0],
+            "coord_x": [100.0],
+            "coord_y": [100.0],
+        }
+    )
+    batch = pd.concat([in_bounds_point, far_point], ignore_index=True)
+    model = GSARegressor(
+        base_estimator=RandomForestRegressor(n_estimators=10, random_state=0),
+        spa_cols=["coord_x", "coord_y"],
+        x_cols=["x1", "x2"],
+        K=16,
+        s=0.0,
+        n_ensembles=1,
+        random_state=0,
+    )
+
+    model.fit(X_train, y_train)
+    single_prediction = model.predict(in_bounds_point)
+    batch_prediction = model.predict(batch)
+
+    assert np.allclose(single_prediction[0], batch_prediction[0])
+
+
+def test_gsa_regressor_accepts_explicit_spatial_bounds() -> None:
+    X_train, y_train, _ = make_dataset()
+    model = GSARegressor(
+        base_estimator=RandomForestRegressor(n_estimators=10, random_state=0),
+        spa_cols=["coord_x", "coord_y"],
+        spa_bounds={"coord_x": (-1.0, 2.0), "coord_y": (-2.0, 3.0)},
+        x_cols=["x1", "x2"],
+        K=4,
+        random_state=0,
+    )
+
+    model.fit(X_train, y_train)
+
+    assert np.allclose(model.spa_bounds_.mins, [-1.0, -2.0])
+    assert np.allclose(model.spa_bounds_.maxs, [2.0, 3.0])
