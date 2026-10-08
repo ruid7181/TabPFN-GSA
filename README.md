@@ -4,7 +4,7 @@ Inspired by Tobler's law of Geography, **Geospatial Sparse Attention (GSA)** add
 
 _**Attention should be focused more on spatially nearby data points than on distant ones.**_
 
-## What is TabPFN-GSA?
+## 1. What is TabPFN-GSA?
 
 🌊 [**TabPFN**](https://www.nature.com/articles/s41586-024-08328-6) is a powerful tabular foundation model (TFM), and has shown strong performance against many traditional tabular models (e.g., XGBoost, CatBoost, etc.) through ICL.
 
@@ -12,11 +12,11 @@ _**Attention should be focused more on spatially nearby data points than on dist
 
 🏄🏻‍♂️ **TabPFN-GSA** introduces a simple geospatial inductive bias. For each prediction location, it gives more context capacity to nearby samples, and only samples a small subset of distant samples.
 
-**GSA also works with other ICL models.** Local TabPFN is the default; pass another model's methods through `model_kwargs`. [See TabICL and other interfaces below.](#use-other-icl-models)
+**GSA also works with other ICL models.** Local TabPFN is the default; pass another model's methods through `model_kwargs`. [See TabICL and other interfaces below.](#3-use-other-icl-models)
 
 ![Geospatial Sparse Attention](docs/spatial-sparse-attention.png)
 
-### Incorporating a geospatial inductive bias to TabPFN
+### 1.1 Incorporating a geospatial inductive bias to TabPFN
 
 GSA follows a simple workflow:
 
@@ -28,7 +28,7 @@ GSA follows a simple workflow:
 
 This makes the ICL context more spatially relevant, and usually smaller, so the model can effectively deal with larger datasets!
 
-### Hyperparameters
+### 1.2 Hyperparameters
 
 | Parameter | Meaning                                                                                                                     |
 |-----------|-----------------------------------------------------------------------------------------------------------------------------|
@@ -36,11 +36,11 @@ This makes the ICL context more spatially relevant, and usually smaller, so the 
 | `s` | Distant sampling rate. `0` means nearby only; larger values add more distant samples (a small minimum is kept when `s > 0`). |
 
 
-## Usage
+## 2. Usage
 
-[Local TabPFN](#local-tabpfn-default) is the default. Use the same interface for [TabICL](#local-tabicl) or [TabPFN Cloud](#cloud-tabpfn-client).
+[Local TabPFN](#24-local-tabpfn-default) is the default. Use the same interface for [TabICL](#31-local-tabicl) or [TabPFN Cloud](#32-cloud-tabpfn-client). See [validation status](#5-validation-status) for tested versions.
 
-### Installation
+### 2.1 Installation
 
 Install GSA with local TabPFN:
 
@@ -53,7 +53,7 @@ pip install -e .
 Other models and cloud clients require their own installation and credentials. The base installation always includes local TabPFN.
 
 <details>
-<summary><strong>Interface and parameters</strong></summary>
+<summary><strong>2.2 Interface and parameters</strong></summary>
 
 | Parameter | Description                                                                |
 |-----------|----------------------------------------------------------------------------|
@@ -71,7 +71,7 @@ For development and tests: `pip install -e '.[dev]'`.
 
 </details>
 
-### Prepare data
+### 2.3 Prepare data
 
 Define your pandas data once, then choose one model example below.
 
@@ -83,7 +83,7 @@ X_train, y_train = train_df[cols], train_df["target"]
 X_test = test_df[cols]
 ```
 
-### Local TabPFN (default)
+### 2.4 Local TabPFN (default)
 
 ```python
 model = GSAModel(
@@ -101,7 +101,7 @@ pred = model.predict(X_test)
 Inference runs locally with `cuda -> mps -> cpu` selected automatically. First use may download [TabPFN weights](https://github.com/PriorLabs/TabPFN); your dataset is not sent to the cloud API. `verbose=True` prints the package version and device.
 
 <details>
-<summary><strong>Input requirements and reproducibility</strong></summary>
+<summary><strong>2.5 Input requirements and reproducibility</strong></summary>
 
 - Keep the target out of `X`. Coordinates and targets must be numeric and finite.
 - `fit` stores data; `predict` fits local contexts, each subject to the model's memory and sample limits.
@@ -110,11 +110,11 @@ Inference runs locally with `cuda -> mps -> cpu` selected automatically. First u
 
 </details>
 
-## Use other ICL models
+## 3. Use other ICL models
 
 For sklearn-compatible models, pass `fit` and `predict` from the **same instance**. Configure its device, checkpoint and seed on that model. GSA independently controls spatial sampling and creates a fresh model for each context.
 
-### Local TabICL
+### 3.1 Local TabICL
 
 Install [TabICL](https://github.com/soda-inria/tabicl) in the same Python environment:
 
@@ -138,7 +138,7 @@ model.fit(X_train, y_train)
 pred = model.predict(X_test)
 ```
 
-### Cloud TabPFN Client
+### 3.2 Cloud TabPFN Client
 
 Install the [official cloud client](https://github.com/PriorLabs/tabpfn-client):
 
@@ -172,7 +172,7 @@ pred = model.predict(X_test)
 **Cloud uploads sampled training data, targets and query features, including coordinates.** Grids, repeated sampling and tuning generate multiple requests; check your service quota. `sends_data_to_remote` labels this in runtime information; it does not select the service. For unattended runs, use `TABPFN_TOKEN` instead of the prompt ([authentication guide](https://github.com/PriorLabs/tabpfn-client#authentication)).
 
 <details>
-<summary><strong>Local LimiX 2M / 16M and custom functions</strong></summary>
+<summary><strong>3.3 Local LimiX 2M / 16M and custom functions</strong></summary>
 
 For a different API, `fit_fn(X_train, y_train)` returns a fresh model or context, and `predict_fn(state, X_test)` returns one value per row (array or PyTorch tensor). Inputs are pandas objects.
 
@@ -212,10 +212,10 @@ Weights are loaded once. `use_data_cache=False` avoids stale grid contexts; `tas
 
 </details>
 
-## Tuning and uncertainty
+## 4. Tuning and uncertainty
 
 <details>
-<summary><strong>Find optimal K and s with Optuna</strong></summary>
+<summary><strong>4.1 Find optimal K and s with Optuna</strong></summary>
 
 `tune_gsa` uses Optuna to search optimal `K` and `s`.
 
@@ -243,7 +243,7 @@ Combinations that leave a validation grid without training samples are skipped. 
 </details>
 
 <details>
-<summary><strong>Prediction with uncertainty</strong></summary>
+<summary><strong>4.2 Prediction with uncertainty</strong></summary>
 
 ```python
 result = model.predict_with_uncertainty(X_test)
@@ -257,10 +257,23 @@ diagnostics = result.diagnostics
 
 </details>
 
-## Citation
+## 5. Validation status
 
-<details>
-<summary><strong>BibTeX citation</strong></summary>
+Checks recorded for this revision (2026-10-08):
+
+| Model / client | Package version | Verified scope |
+|----------------|-----------------|----------------|
+| Local TabPFN | `tabpfn==7.1.1` | Construction, device/seed configuration and refit settings; pretrained inference not re-run for this revision. |
+| Local TabICL | `tabicl==2.2.0` | Construction, sklearn cloning and GSA setup; no checkpoint inference. |
+| Regression baselines (RandomForest, DummyRegressor) | `scikit-learn==1.8.0` | GSA fit/predict and Optuna tuning on synthetic data. |
+| LimiX 2M / 16M | Not runtime-tested | Example checked against upstream interfaces; no checkpoint inference. |
+| TabPFN Cloud | Not runtime-tested | Example checked against client documentation; no authenticated service call. |
+
+The local suite passes **61 tests**, including custom callbacks, model isolation, batch stability and tensor outputs. Environment: macOS ARM64, Python 3.13.11, PyTorch 2.11.0, Optuna 4.8.0. TabICL was checked in a temporary installation.
+
+Package versions are not checkpoint identifiers. Interface checks do not establish inference accuracy or GPU compatibility for every model.
+
+## 6. Citation
 
 ```bibtex
 @article{deng2026foundation,
@@ -272,5 +285,3 @@ diagnostics = result.diagnostics
   publisher={Taylor \& Francis}
 }
 ```
-
-</details>
