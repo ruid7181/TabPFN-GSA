@@ -12,7 +12,7 @@ _**Attention should be focused more on spatially nearby data points than on dist
 
 🏄🏻‍♂️ **TabPFN-GSA** introduces a simple geospatial inductive bias. For each prediction location, it gives more context capacity to nearby samples, and only samples a small subset of distant samples.
 
-**GSA also works with other ICL models.** Local TabPFN is the default; pass another model's methods through `model_kwargs`. [See TabICL and other interfaces below.](#3-use-other-icl-models)
+**GSA also works with other tabular foundation models (TFMs).** [See the supported integrations below.](#3-use-other-tabular-foundation-models)
 
 ![Geospatial Sparse Attention](docs/spatial-sparse-attention.png)
 
@@ -38,7 +38,7 @@ This makes the ICL context more spatially relevant, and usually smaller, so the 
 
 ## 2. Usage
 
-[Local TabPFN](#24-local-tabpfn-default) is the default. Use the same interface for [TabICL](#31-local-tabicl) or [TabPFN Cloud](#32-cloud-tabpfn-client). See [validation status](#5-validation-status) for tested versions.
+`GSAModel` uses **local TabPFN by default**. Other tabular foundation models and cloud inference use the same interface; see [Section 3](#3-use-other-tabular-foundation-models).
 
 ### 2.1 Installation
 
@@ -52,28 +52,36 @@ pip install -e .
 
 Other models and cloud clients require their own installation and credentials. The base installation always includes local TabPFN.
 
+First use may download [TabPFN weights](https://github.com/PriorLabs/TabPFN). Default inference runs on your machine without uploading your dataset to the cloud API.
+
 <details>
 <summary><strong>2.2 Interface and parameters</strong></summary>
 
 | Parameter | Description                                                                |
 |-----------|----------------------------------------------------------------------------|
-| `spa_cols` | Two spatial coordinate columns, for example `["coord_x", "coord_y"]`.      |
+| `spa_cols` | Two numeric, finite coordinate columns, for example `["coord_x", "coord_y"]`. |
 | `spa_bounds` | Optional fixed spatial bounds, for example `{"coord_x": (0, 1), "coord_y": (0, 1)}`. If omitted, bounds are learned from training coordinates. |
 | `x_cols` | Non-spatial feature columns. If omitted, all non-spatial columns are used. |
 | `K` | Total grid cells, a square number. Default: `64`. |
 | `s` | Distant sampling rate. Default: `0.1`. |
 | `random_state` | GSA sampling seed, also passed to default local TabPFN. Default: `0`. |
-| `device` | Default local TabPFN only: `"auto"`, `"cuda"`, `"mps"`, or `"cpu"`. Configure other models on their own objects. |
-| `verbose` | Print runtime information when fitting.                                    |
+| `device` | Default local TabPFN only. `"auto"` selects `cuda -> mps -> cpu`; set a device explicitly if needed. |
+| `verbose` | Print runtime information, including the local TabPFN package version and device. |
 | `model_kwargs` | Local TabPFN constructor options, or custom `fit_fn` / `predict_fn` as shown below. |
 
 For development and tests: `pip install -e '.[dev]'`.
+
+**Notes:**
+
+- Keep the target out of `X`; target values must be numeric and finite.
+- `fit` stores data; `predict` fits each local context within the model's memory and sample limits. If `s=0` leaves an empty neighborhood, increase `s` or reduce `K`.
+- A fixed seed keeps GSA sampling stable across prediction batches. Reproducible inference also depends on model/checkpoint versions and hardware.
 
 </details>
 
 ### 2.3 Prepare data
 
-Define your pandas data once, then choose one model example below.
+Assume `train_df` and `test_df` are your training and test pandas DataFrames.
 
 ```python
 from tabpfn_gsa import GSAModel
@@ -83,7 +91,7 @@ X_train, y_train = train_df[cols], train_df["target"]
 X_test = test_df[cols]
 ```
 
-### 2.4 Local TabPFN (default)
+### 2.4 Run inference on your data
 
 ```python
 model = GSAModel(
@@ -98,21 +106,11 @@ model.fit(X_train, y_train)
 pred = model.predict(X_test)
 ```
 
-Inference runs locally with `cuda -> mps -> cpu` selected automatically. First use may download [TabPFN weights](https://github.com/PriorLabs/TabPFN); your dataset is not sent to the cloud API. `verbose=True` prints the package version and device.
+## 3. Use other Tabular Foundation Models
 
-<details>
-<summary><strong>2.5 Input requirements and reproducibility</strong></summary>
+By default, `GSAModel` uses locally installed TabPFN. To use **TabICL**, **LimiX (2M / 16M)**, or **TabPFN Cloud**, follow the examples below. Install and configure the chosen model separately.
 
-- Keep the target out of `X`. Coordinates and targets must be numeric and finite.
-- `fit` stores data; `predict` fits local contexts, each subject to the model's memory and sample limits.
-- If `s=0` leaves an empty neighborhood, increase `s` or reduce `K`.
-- A fixed seed gives each grid the same sampled context across batches. Record model/checkpoint versions and hardware for reproducibility.
-
-</details>
-
-## 3. Use other ICL models
-
-For sklearn-compatible models, pass `fit` and `predict` from the **same instance**. Configure its device, checkpoint and seed on that model. GSA independently controls spatial sampling and creates a fresh model for each context.
+For TabICL and TabPFN Cloud, pass `fit` and `predict` from the **same instance**. Set the model's device, checkpoint and seed on that instance; GSA controls spatial sampling.
 
 ### 3.1 Local TabICL
 
@@ -172,9 +170,7 @@ pred = model.predict(X_test)
 **Cloud uploads sampled training data, targets and query features, including coordinates.** Grids, repeated sampling and tuning generate multiple requests; check your service quota. `sends_data_to_remote` labels this in runtime information; it does not select the service. For unattended runs, use `TABPFN_TOKEN` instead of the prompt ([authentication guide](https://github.com/PriorLabs/tabpfn-client#authentication)).
 
 <details>
-<summary><strong>3.3 Local LimiX 2M / 16M and custom functions</strong></summary>
-
-For a different API, `fit_fn(X_train, y_train)` returns a fresh model or context, and `predict_fn(state, X_test)` returns one value per row (array or PyTorch tensor). Inputs are pandas objects.
+<summary><strong>3.3 Local LimiX 2M / 16M</strong></summary>
 
 For [LimiX](https://github.com/limix-ldm-ai/LimiX), install its environment and download a 2M or 16M checkpoint first. Run below from the LimiX repository, with GSA installed in the same environment. Replace the checkpoint path.
 
@@ -208,7 +204,7 @@ model.fit(X_train, y_train)
 pred = model.predict(X_test)
 ```
 
-Weights are loaded once. `use_data_cache=False` avoids stale grid contexts; `task_type` belongs in `predict`. Custom services use the same functions, with `sends_data_to_remote=True`.
+Weights are loaded once. `use_data_cache=False` avoids stale grid contexts; `task_type` belongs in `predict`.
 
 </details>
 
@@ -257,23 +253,7 @@ diagnostics = result.diagnostics
 
 </details>
 
-## 5. Validation status
-
-Checks recorded for this revision (2026-10-08):
-
-| Model / client | Package version | Verified scope |
-|----------------|-----------------|----------------|
-| Local TabPFN | `tabpfn==7.1.1` | Construction, device/seed configuration and refit settings; pretrained inference not re-run for this revision. |
-| Local TabICL | `tabicl==2.2.0` | Construction, sklearn cloning and GSA setup; no checkpoint inference. |
-| Regression baselines (RandomForest, DummyRegressor) | `scikit-learn==1.8.0` | GSA fit/predict and Optuna tuning on synthetic data. |
-| LimiX 2M / 16M | Not runtime-tested | Example checked against upstream interfaces; no checkpoint inference. |
-| TabPFN Cloud | Not runtime-tested | Example checked against client documentation; no authenticated service call. |
-
-The local suite passes **61 tests**, including custom callbacks, model isolation, batch stability and tensor outputs. Environment: macOS ARM64, Python 3.13.11, PyTorch 2.11.0, Optuna 4.8.0. TabICL was checked in a temporary installation.
-
-Package versions are not checkpoint identifiers. Interface checks do not establish inference accuracy or GPU compatibility for every model.
-
-## 6. Citation
+## 5. Citation
 
 ```bibtex
 @article{deng2026foundation,
