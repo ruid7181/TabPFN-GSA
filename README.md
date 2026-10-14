@@ -1,5 +1,7 @@
 # TabPFN-GSA
 
+[![Paper](https://img.shields.io/badge/Paper-IJGIS-00796B)](https://doi.org/10.1080/13658816.2026.2691066)
+
 Inspired by Tobler's law of Geography, **Geospatial Sparse Attention (GSA)** adds a geospatial inductive bias to TabPFN's In-context Learning (ICL) inference:
 
 _**Attention should be focused more on spatially nearby data points than on distant ones.**_
